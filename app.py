@@ -8,12 +8,17 @@ from flask_sqlalchemy import SQLAlchemy
 from stop_words import stops
 from collections import Counter
 from bs4 import BeautifulSoup
+from rq import Queue
+from rq.job import Job
+from worker import conn
 
 
 app = Flask(__name__)
 app.config.from_object(os.environ['APP_SETTINGS'])
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+q = Queue(connection=conn) # this sets up a Redis connection and initialize a queue based on that connection
 
 from models import Result
 
