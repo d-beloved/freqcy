@@ -22,51 +22,63 @@ q = Queue(connection=conn) # this sets up a Redis connection and initialize a qu
 
 from models import Result
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
+def count_and_save_words(url):
   errors = []
-  results = {}
-  if request.method == "POST":
-    # get the url that the user has entered
-    try:
-      url = request.form['url']
+
+  try:
       r = requests.get(url)
-    except:
+  except:
       errors.append(
         "Unable to get URL. Please make sure it's valid and try again."
       )
-      return render_template('index.html', errors=errors)
-    if r:
-      # text processing
-      raw = BeautifulSoup(r.text, 'html.parser').get_text()
-      nltk.data.path.append('./nltk_data/') # set the path
-      tokens = nltk.word_tokenize(raw)
-      text = nltk.Text(tokens)
-      # remove punctuation, count raw words
-      nonPunct = re.compile('.*[A-Za-z].*')
-      raw_words = [w for w in text if nonPunct.match(w)]
-      raw_words_count = Counter(raw_words)
-      # stop words
-      no_stop_words = [w for w in raw_words if w.lower() not in stops]
-      no_stop_words_counts = Counter(no_stop_words)
-      # display and save results
-      results = sorted(
-        no_stop_words_counts.items(),
-        key=operator.itemgetter(1),
-        reverse=True
-      )[:10]
-      try:
-        result = Result(
-          url=url,
-          result_all=raw_words_count,
-          result_no_stop_words=no_stop_words_counts
-        )
-        db.session.add(result)
-        db.session.commit()
-      except:
-        errors.append("Unable to add item to database")
+      return {"error": errors}
 
-  return render_template('index.html', errors=errors, results=results)
+  # text processing
+  raw = BeautifulSoup(r.text).get_text()
+  nltk.data.path.append('./nltk_data/') # set the path
+  tokens = nltk.word_tokenize(raw)
+  text = nltk.Text(tokens)
+
+  # remove punctuation, count raw words
+  nonPunct = re.compile('.*[A-Za-z].*')
+  raw_words = [w for w in text if nonPunct.match(w)]
+  raw_words_count = Counter(raw_words)
+
+  # stop words
+  no_stop_words = [w for w in raw_words if w.lower() not in stops]
+  no_stop_words_counts = Counter(no_stop_words)
+
+  # save results
+  try:
+    result = Result(
+      url=url,
+      result_all=raw_words_count,
+      result_no_stop_words=no_stop_words_counts
+    )
+    db.session.add(result)
+    db.session.commit()
+    return result.id
+  except:
+    errors.append("Unable to add item to database")
+    return {"error": errors}
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+  results = {}
+  if request.method == "POST":
+    # this import solves a rq bug which currently exists
+    from app import count_and_save_words
+
+    # get url that the person has entered
+    url = request.form['url']
+    if not url[:8].startwith(('https://', 'http://')):
+      url = 'http://' + url
+    job = q.enqueue_call(
+      func=count_and_save_words, args=(url,), result_ttl=5000
+    )
+    print(job.get_id)
+
+  return render_template('index.html', results=results)
 
 if __name__ == '__main__':
   app.run()
