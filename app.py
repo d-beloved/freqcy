@@ -80,7 +80,7 @@ def index():
 
     return render_template('index.html', results=results)
 
-@app.route("/results/<job_key", methods=['GET'])
+@app.route("/results/<job_key>", methods=['GET'])
 def get_results(job_key):
 
   job = Job.fetch(job_key, connection=conn)
