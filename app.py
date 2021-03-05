@@ -1,3 +1,4 @@
+from models import Result
 import os
 import requests
 import operator
@@ -10,6 +11,7 @@ from collections import Counter
 from bs4 import BeautifulSoup
 from rq import Queue
 from rq.job import Job
+from flask import jsonify
 from worker import conn
 
 
@@ -19,8 +21,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 q = Queue(connection=conn) # this sets up a Redis connection and initialize a queue based on that connection
-
-from models import Result
 
 def count_and_save_words(url):
   errors = []
@@ -50,6 +50,7 @@ def count_and_save_words(url):
 
   # save results
   try:
+    from models import Result
     result = Result(
       url=url,
       result_all=raw_words_count,
@@ -85,7 +86,13 @@ def get_results(job_key):
 
   job = Job.fetch(job_key, connection=conn)
   if job.is_finished:
-    return str(job.result), 200
+    result = Result.query.filter_by(id=job.result).first()
+    results = sorted(
+      result.result_no_stop_words.items(),
+      key=operator.itemgetter(1),
+      reverse = True
+    )[:10]
+    return jsonify(results)
   else:
     return "Nay!", 202
 
