@@ -78,6 +78,8 @@ def index():
     )
     print(job.get_id)
 
+@app.route
+
   return render_template('index.html', results=results)
 
 if __name__ == '__main__':
